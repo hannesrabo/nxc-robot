@@ -1,0 +1,1 @@
+pscp -pw 1234 out.exe robot@192.168.137.3:/home/robot/flyingProgram

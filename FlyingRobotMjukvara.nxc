@@ -1,0 +1,106 @@
+//Konstanter för ingångar
+#define IN_LIGHT IN_1
+#define IN_TOUCH_LEFT IN_2
+#define IN_TOUCH_RIGHT IN_3
+#define IN_ULTRASONIC IN_4
+
+#define MOTOR_LEFT OUT_A
+#define MOTOR_RIGHT OUT_B
+#define MOTOR_BOTH OUT_AB
+
+#define diameter 120
+#define detectionSpeed 100
+#define reflection_threshold 50
+#define escape_rotation_time 250
+#define escape_rotation_speed 100
+#define escape_backwards_time 500
+
+mutex motorMutex;
+bool leftBumper = false;
+bool rightBumper = false;
+
+//Roterar för att hitta den andra roboten
+sub findRobot() {
+    Acquire(motorMutex);
+         OnFwd(MOTOR_LEFT, detectionSpeed);
+         OnRev(MOTOR_RIGHT, detectionSpeed);
+         
+         until SensorUS(IN_ULTRASONIC) < diameter)
+               Off(MOTOR_BOTH);
+    Release(motorMutex);
+}
+
+//Hittar den andra roboten och följer den
+task robotFinder() {
+     while (true) {
+           //Om ultraljudssensor ser ett hinder närmare en spelplanens storlek
+           if(SensorUS(IN_ULTRASONIC) < diameter) { //Mål finns
+                  Acquire(motorMutex);
+                       OnFwdReg(MOTOR_BOTH, 100, OUT_REGMODE_SPEED);
+                  Release(motorMutex);
+           } else { //Mål saknas
+                  findRobot();
+           }
+     }
+}
+
+//Skyddar roboten från att åka av från kanten
+task edgeControl() {
+     while(true) {
+           //Read touchsensors
+           leftBumper = SensorBoolean(IN_TOUCH_LEFT);
+           rightBumper = SensorBoolean(IN_TOUCH_RIGHT);
+     
+           //Om den är på det svarta strecket
+           if(Sensor(IN_LIGHT) < reflection_threshold) {
+                
+                //Om någon av backre sensorerna är aktiv (påkörd baifrån)
+                if(leftBumper | rightBumper) {
+                     Acquire(motorMutex);
+                          if(leftBumper) {
+                               //rotera escape rotation time åt höger
+                               OnFwd(MOTOR_LEFT, escape_rotation_speed);
+                               OnRev(MOTOR_RIGHT, escape_rotation_speed);
+
+                          } else { //Right bumper
+                               //rotera escape rotation time åt vänster
+                               OnFwd(MOTOR_RIGHT, escape_rotation_speed);
+                               OnRev(MOTOR_LEFT, escape_rotation_speed);
+                          }
+                          Wait(escape_rotation_time);
+                          
+                          OnRev(MOTOR_BOTH, 100);
+                          Wait(escape_backwards_time);
+                          
+                     Release(motorMutex);
+                }
+                
+                //Undvik kanten och genomför sökrotation
+                //TODO - utveckla för att undvika att falla av kanten.
+                findRobot();
+           } else {
+                //TODO - om den blir påkörd bakifrån
+           }
+           
+     }
+}
+
+//Main och start
+task main() {
+     //Startar trådar
+     Precedes(robotFinder, edgeControl);
+
+     //Sensor setup
+     SetSensorType(IN_TOUCH_LEFT, IN_TYPE_SWITCH);
+     SetSensorMode(IN_TOUCH_LEFT, IN_MODE_BOOLEAN);
+     
+     SetSensorType(IN_TOUCH_RIGHT, IN_TYPE_SWITCH);
+     SetSensorMode(IN_TOUCH_RIGHT, IN_MODE_BOOLEAN);
+     
+     SetSensorType(IN_LIGHT, IN_TYPE_LIGHT_ACTIVE);
+     SetSensorMode(IN_LIGHT, SENSOR_MODE_PERCENT);
+     
+     SetSensorType(IN_ULTRASONIC, SENSOR_TYPE_LOWSPEED_9V);
+     SetSensorMode(IN_ULTRASONIC,IN_MODE_RAW);
+
+}

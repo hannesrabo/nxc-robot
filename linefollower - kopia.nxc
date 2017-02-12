@@ -1,0 +1,160 @@
+//Definierar hastigheterna som motorerna går i
+#define SpeedSlow 50
+#define SpeedFast 100
+
+//Gränsvärden för ljussensorn (ändra ej dessa)
+#define TopThreshold 630
+#define BotThreshold 600
+
+//Definierar raderna på robotens skärm
+#define LCD_LINE1 56
+#define LCD_LINE2 48
+#define LCD_LINE3 40
+#define LCD_LINE4 32
+#define LCD_LINE5 24
+#define LCD_LINE6 16
+#define LCD_LINE7 8
+#define LCD_LINE8 0
+
+int lightIntensity;
+bool finished = false;
+bool turning = false;
+
+//En liten trudelutt
+Tone done[] = {
+  TONE_C4, MS_50,
+  TONE_E4, MS_50,
+  TONE_G4, MS_50,
+  TONE_C5, MS_50,
+  TONE_E5, MS_50,
+  TONE_G5, MS_50,
+  TONE_C6, MS_200
+};
+
+//Fyll i namnen på gruppmedlemmarna i listan
+//Ändrat från int till string, och namn tillagda
+string groupMembers[] = {
+ "Hannes",
+ "Max"
+};
+
+//Skriv ut namnen på skärmen
+void printNamesToScreen(string names[])
+{
+ TextOut(0, LCD_LINE1, "Gruppmedlemmar:");
+ int i;
+ for(i = 0; i < ArrayLen(names); i++) /* Loopar igenom listan med namn */
+ {
+  //Ändrade / tog bort -16
+  TextOut(0, (LCD_LINE2 - (8*i /*-16*/ )), names[i]);
+ }
+}
+
+void dance()
+{
+ OnFwd(OUT_A, 87);
+ OnFwd(OUT_B, 20);
+ Wait(SEC_3);
+}
+
+//Läs av värdet från ljussensorn
+void readLightSensor()
+{
+ //Ändrat från IN_1 till IN_3
+ lightIntensity = SensorRaw(IN_3);
+}
+
+void turn()
+{
+     turning = true;
+     PlayTones(done);
+     Off(OUT_AB);
+     OnRev(OUT_AB, SpeedSlow);
+     Wait(1000);
+     OnRev(OUT_A, SpeedSlow);
+     OnFwd(OUT_B, SpeedSlow);
+     Wait(500);
+     while (true)
+     {
+      readLightSensor();
+      if(lightIntensity > TopThreshold)
+      {
+         break;
+      }
+     }
+     turning = false;
+}
+
+//Läs av värden från tryckknapparna
+task readTouchSensors()
+{
+ while(true)
+ {
+  if(Sensor(IN_1) || Sensor(IN_4))
+  {
+   /*finished = true;
+   PlayTones(done);
+   printNamesToScreen(groupMembers);
+   Wait(SEC_20);
+   abort();
+   */
+
+   turn();
+  }
+ }
+}
+
+
+
+//Följ linjen!
+task followLine()
+{
+ while(true)
+ {
+  if(finished == true)
+  {
+   Off(OUT_AB);
+   break;
+  }
+  if(!turning) {
+  readLightSensor();
+   //Om roboten är utanför linjen - Sväng vänster
+   //Om roboten är på linjen - sväng höger
+  if(lightIntensity < TopThreshold)
+  {
+   OnFwd(OUT_A, SpeedSlow);
+   TextOut(0, LCD_LINE1, "1");
+
+  } else {
+   OnFwd(OUT_A, SpeedFast);
+   TextOut(0, LCD_LINE1, "2");
+  }
+
+  if(lightIntensity > BotThreshold)
+  {
+   //Ändrat från speedFast
+   OnFwd(OUT_B, SpeedSlow);
+   TextOut(0, LCD_LINE2, "3");
+  } else {
+
+   OnFwd(OUT_B, SpeedFast);
+   TextOut(0, LCD_LINE2, "4");
+  }
+
+  }
+ }
+}
+
+//Main-aktiviteten (körs alltid först!)
+task main()
+{
+ Precedes(readTouchSensors, followLine);
+ SetSensorType(IN_1, IN_TYPE_SWITCH);
+ SetSensorMode(IN_1, IN_MODE_BOOLEAN);
+ SetSensorType(IN_3, IN_TYPE_LIGHT_ACTIVE);
+ SetSensorMode(IN_3, IN_MODE_RAW);
+ SetSensorType(IN_4, IN_TYPE_SWITCH);
+ SetSensorMode(IN_4, IN_MODE_BOOLEAN);
+ //dance();
+ OnFwd(OUT_AB, SpeedSlow);
+}
